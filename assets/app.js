@@ -1,33 +1,58 @@
-const menu = document.querySelector('.menu');
-const nav = document.querySelector('nav');
-menu.addEventListener('click', () => {
-  const open = nav.classList.toggle('open');
-  menu.setAttribute('aria-expanded', String(open));
-  menu.textContent = open ? '關閉' : '選單';
-});
-nav.querySelectorAll('a').forEach((link) => link.addEventListener('click', () => {
-  nav.classList.remove('open');
-  menu.setAttribute('aria-expanded', 'false');
-  menu.textContent = '選單';
-}));
+import { calculateInspection } from './calculator.js';
 
+const menu = document.querySelector('.menu');
+const nav = document.querySelector('#primary-navigation');
 const form = document.querySelector('#checkForm');
+const input = document.querySelector('#manufacture');
 const result = document.querySelector('#result');
+
+function setMenu(open) {
+  nav.classList.toggle('open', open);
+  menu.setAttribute('aria-expanded', String(open));
+  menu.setAttribute('aria-label', open ? '關閉選單' : '開啟選單');
+  menu.textContent = open ? '關閉' : '選單';
+}
+
+menu.addEventListener('click', () => setMenu(!nav.classList.contains('open')));
+nav.querySelectorAll('a').forEach((link) => link.addEventListener('click', () => setMenu(false)));
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && nav.classList.contains('open')) {
+    setMenu(false);
+    menu.focus();
+  }
+});
+
+const current = new Date();
+input.max = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`;
+
+function appendText(parent, tag, text, className) {
+  const node = document.createElement(tag);
+  node.textContent = text;
+  if (className) node.className = className;
+  parent.append(node);
+  return node;
+}
+
 form.addEventListener('submit', (event) => {
   event.preventDefault();
-  const value = document.querySelector('#manufacture').value;
-  if (!value) return;
-  const [year, month] = value.split('-').map(Number);
-  const now = new Date();
-  const age = now.getFullYear() - year - (now.getMonth() + 1 < month ? 1 : 0);
-  const rocYear = year - 1911;
-  if (age < 5) {
-    result.innerHTML = `<span class="result-mark">✓</span><div><small>試算結果</small><h3>目前尚未滿 5 年</h3><p>這台機車約於民國 ${rocYear + 5} 年 ${month} 月滿 5 年，屆時請依官方通知辦理。</p></div>`;
-  } else {
-    const prev = month === 1 ? 12 : month - 1;
-    const next = month === 12 ? 1 : month + 1;
-    result.innerHTML = `<span class="result-mark">!</span><div><small>試算結果</small><h3>今年需辦理排氣定檢</h3><p>建議檢驗期間為 ${prev} 月至 ${next} 月（以出廠月 ${month} 月前後 1 個月估算）。</p><a href="https://www.motorim.org.tw/query/Query_Check.aspx" target="_blank" rel="noopener">前往官方系統確認 ↗</a></div>`;
+  const outcome = calculateInspection(input.value);
+  result.replaceChildren();
+
+  const mark = appendText(result, 'span', outcome.kind === 'error' ? '×' : outcome.kind === 'not-due' ? '✓' : '!', 'result-mark');
+  if (outcome.kind === 'error') mark.classList.add('error');
+  const content = document.createElement('div');
+  appendText(content, 'small', outcome.kind === 'error' ? '輸入有誤' : '試算結果');
+  appendText(content, 'h3', outcome.title || '無法試算');
+  appendText(content, 'p', outcome.message);
+
+  if (outcome.kind === 'due') {
+    const officialLink = appendText(content, 'a', '前往官方系統確認 ↗');
+    officialLink.href = 'https://mobile.moenv.gov.tw/Motor/query/Query_Check.aspx';
+    officialLink.target = '_blank';
+    officialLink.rel = 'noopener noreferrer';
   }
+
+  result.append(content);
   result.hidden = false;
   result.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 });
